@@ -27,14 +27,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
 @SourceType(value = "QUESTDB", label = "QUESTDB", uiConfig = "quest-layout.json")
 public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     private static final String ARP_FILENAME = "arp/implementation/quest-arp.yaml";
-    private static final ArpDialect ARP_DIALECT = AbstractArpConf.loadArpFile(ARP_FILENAME, CratedbDialect::new);
+    private static final ArpDialect ARP_DIALECT = AbstractArpConf.loadArpFile(ARP_FILENAME, QuestdbDialect::new);
     private static final String DRIVER = "org.postgresql.Driver";
 
-    static class CratedbSchemaFetcherV2 extends ArpDialect.ArpSchemaFetcher {
-        private static final Logger logger = LoggerFactory.getLogger(CratedbSchemaFetcherV2.class);
+    static class QuestdbSchemaFetcher extends ArpDialect.ArpSchemaFetcher {
+        private static final Logger logger = LoggerFactory.getLogger(QuestdbSchemaFetcher.class);
         private final JdbcPluginConfig config;
 
-        public CratedbSchemaFetcherV2(String query, JdbcPluginConfig config) {
+        public QuestdbSchemaFetcher(String query, JdbcPluginConfig config) {
             super(query, config);
             this.config = config;
             logger.info("query schema:{}", query);
@@ -116,15 +116,15 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
         }
     }
 
-    static class CratedbDialect extends ArpDialect {
-        public CratedbDialect(ArpYaml yaml) {
+    static class QuestdbDialect extends ArpDialect {
+        public QuestdbDialect(ArpYaml yaml) {
             super(yaml);
         }
 
         @Override
         public ArpSchemaFetcher newSchemaFetcher(JdbcPluginConfig config) {
-            String query = String.format("SELECT NULL, SCH, NME from ( select table_catalog CAT, table_schema SCH, table_name NME from information_schema.\"tables\" union all select table_catalog CAT, table_schema SCH,table_name NME from information_schema.views ) t where cat not in ('information_schema','pg_catalog','sys', '%s')", new Object[]{Joiner.on("','").join(config.getHiddenSchemas())});
-            return new CratedbSchemaFetcherV2(query, config);
+            String query = String.format("SELECT NULL,NULL, NME from (select name NME from TABLES) t where NME not in ('%s')", new Object[]{Joiner.on("','").join(config.getHiddenSchemas())});
+            return new QuestdbSchemaFetcher(query, config);
         }
 
         @Override
@@ -141,7 +141,7 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     @Tag(1)
     @DisplayMetadata(label = "username")
     @NotMetadataImpacting
-    public String username = "crate";
+    public String user = "admin";
 
     @Tag(2)
     @DisplayMetadata(label = "host")
@@ -154,35 +154,45 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     public String password = "";
 
     @Tag(4)
+    @Secret
+    @DisplayMetadata(label = "database")
+    @NotMetadataImpacting
+    public String database = "";
+
+    @Tag(5)
     @DisplayMetadata(label = "port")
     @NotMetadataImpacting
     public int port = 5432;
 
-    @Tag(5)
+    @Tag(6)
     @DisplayMetadata(label = "Record fetch size")
     @NotMetadataImpacting
     public int fetchSize = 200;
 
 
-    @Tag(6)
+    @Tag(7)
     @DisplayMetadata(
             label = "Maximum idle connections"
     )
     @NotMetadataImpacting
     public int maxIdleConns = 8;
 
-    @Tag(7)
+    @Tag(8)
     @DisplayMetadata(
             label = "Connection idle time (s)"
     )
     @NotMetadataImpacting
     public int idleTimeSec = 60;
 
+    // unsupported feature ssl
+    @Tag(9)
+    public String sslmode = "disable";
+
     @VisibleForTesting
     public String toJdbcConnectionString() {
-        checkNotNull(this.username, "Missing username.");
-        // format crate://localhost:5433/
-        final String format = String.format("crate://%s:%d/", this.host, this.port);
+        checkNotNull(this.user, "Missing username.");
+        // format jdbc:postgresql://localhost:8812/qdb
+        final String format = String.format("jdbc:postgresql://%s:%d/", this.host, this.port);
         return format;
     }
 
@@ -197,15 +207,15 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
         return configBuilder.withDialect(getDialect())
                 .withFetchSize(fetchSize)
                 .clearHiddenSchemas()
-                .addHiddenSchema("sys")
                 .withDatasourceFactory(this::newDataSource)
                 .build();
     }
 
     private CloseableDataSource newDataSource() {
         Properties properties = new Properties();
+        properties.setProperty("database",this.database);
         CloseableDataSource dataSource = DataSources.newGenericConnectionPoolDataSource(DRIVER,
-                toJdbcConnectionString(), this.username, this.password, properties, DataSources.CommitMode.DRIVER_SPECIFIED_COMMIT_MODE, this.maxIdleConns, this.idleTimeSec);
+                toJdbcConnectionString(), this.user, this.password, properties, DataSources.CommitMode.DRIVER_SPECIFIED_COMMIT_MODE, this.maxIdleConns, this.idleTimeSec);
         return dataSource;
     }
 
