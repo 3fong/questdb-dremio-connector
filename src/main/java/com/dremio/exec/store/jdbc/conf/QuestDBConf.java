@@ -11,14 +11,11 @@ import com.dremio.options.OptionManager;
 import com.dremio.security.CredentialsService;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Strings;
 import io.protostuff.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Properties;
 
@@ -27,7 +24,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 @SourceType(value = "QUESTDB", label = "QUESTDB", uiConfig = "quest-layout.json")
 public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     private static final String ARP_FILENAME = "arp/implementation/quest-arp.yaml";
-    private static final ArpDialect ARP_DIALECT = AbstractArpConf.loadArpFile(ARP_FILENAME, QuestdbDialect::new);
     private static final String DRIVER = "org.postgresql.Driver";
 
     static class QuestdbSchemaFetcher extends ArpDialect.ArpSchemaFetcher {
@@ -37,83 +33,16 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
         public QuestdbSchemaFetcher(String query, JdbcPluginConfig config) {
             super(query, config);
             this.config = config;
-            logger.info("query schema:{}", query);
-        }
-
-        @Override
-        public JdbcFetcherProto.GetTableMetadataResponse getTableMetadata(JdbcFetcherProto.GetTableMetadataRequest request) {
-            return super.getTableMetadata(request);
+            logger.info("query schema:{} config: {}", query, config);
         }
 
         @Override
         protected JdbcFetcherProto.CanonicalizeTablePathResponse getDatasetHandleViaGetTables(JdbcFetcherProto.CanonicalizeTablePathRequest request, Connection connection) throws SQLException {
-            DatabaseMetaData metaData = connection.getMetaData();
-            FilterDescriptor filter = new FilterDescriptor(request, supportsCatalogsWithoutSchemas(this.config.getDialect(), metaData));
-            ResultSet tablesResult = metaData.getTables(filter.catalogName, filter.schemaName, filter.tableName, (String[]) null);
-            Throwable throwable = null;
-
-            JdbcFetcherProto.CanonicalizeTablePathResponse canonicalizeTablePathResponse;
-            try {
-                String currSchema;
-                do {
-                    if (!tablesResult.next()) {
-                        return JdbcFetcherProto.CanonicalizeTablePathResponse.getDefaultInstance();
-                    }
-                    currSchema = tablesResult.getString(2);
-                } while (!Strings.isNullOrEmpty(currSchema) && this.config.getHiddenSchemas().contains(currSchema));
-                com.dremio.exec.store.jdbc.JdbcFetcherProto.CanonicalizeTablePathResponse.Builder responseBuilder = JdbcFetcherProto.CanonicalizeTablePathResponse.newBuilder();
-                // cratedb not support catalog,but default implement fetch it so omit it
-                if (!Strings.isNullOrEmpty(currSchema)) {
-                    responseBuilder.setSchema(currSchema);
-                }
-                responseBuilder.setTable(tablesResult.getString(3));
-                canonicalizeTablePathResponse = responseBuilder.build();
-            } catch (Throwable ex) {
-                throwable = ex;
-                throw ex;
-            } finally {
-                if (tablesResult != null) {
-                    try {
-                        closeResource(throwable, tablesResult);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-            }
-            return canonicalizeTablePathResponse;
+            com.dremio.exec.store.jdbc.JdbcFetcherProto.CanonicalizeTablePathResponse.Builder responseBuilder = JdbcFetcherProto.CanonicalizeTablePathResponse.newBuilder();
+            responseBuilder.setTable(request.getTable());
+            return responseBuilder.build();
         }
 
-        private static void closeResource(Throwable throwable, AutoCloseable autoCloseable) throws Exception {
-            if (throwable != null) {
-                try {
-                    autoCloseable.close();
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-            } else {
-                autoCloseable.close();
-            }
-
-        }
-
-        protected static class FilterDescriptor {
-            private final String catalogName;
-            private final String schemaName;
-            private final String tableName;
-
-            public FilterDescriptor(JdbcFetcherProto.CanonicalizeTablePathRequest request, boolean hasCatalogsWithoutSchemas) {
-                this.tableName = request.getTable();
-                if (!Strings.isNullOrEmpty(request.getSchema())) {
-                    this.schemaName = request.getSchema();
-                    this.catalogName = request.getCatalogOrSchema();
-                } else {
-                    this.catalogName = hasCatalogsWithoutSchemas ? request.getCatalogOrSchema() : "";
-                    this.schemaName = hasCatalogsWithoutSchemas ? "" : request.getCatalogOrSchema();
-                }
-
-            }
-        }
     }
 
     static class QuestdbDialect extends ArpDialect {
@@ -123,7 +52,7 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
 
         @Override
         public ArpSchemaFetcher newSchemaFetcher(JdbcPluginConfig config) {
-            String query = String.format("SELECT NULL,NULL, NME from (select name NME from TABLES) t where NME not in ('%s')", new Object[]{Joiner.on("','").join(config.getHiddenSchemas())});
+            String query = String.format("SELECT NULL,NULL,name NME from TABLES where name not in ('telemetry','telemetry_config','%s')", new Object[]{Joiner.on("','").join(config.getHiddenSchemas())});
             return new QuestdbSchemaFetcher(query, config);
         }
 
@@ -184,15 +113,11 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     @NotMetadataImpacting
     public int idleTimeSec = 60;
 
-    // unsupported feature ssl
-    @Tag(9)
-    public String sslmode = "disable";
-
     @VisibleForTesting
     public String toJdbcConnectionString() {
         checkNotNull(this.user, "Missing username.");
         // format jdbc:postgresql://localhost:8812/qdb
-        final String format = String.format("jdbc:postgresql://%s:%d/", this.host, this.port);
+        final String format = String.format("jdbc:postgresql://%s:%d/?sslmode=disable", this.host, this.port);
         return format;
     }
 
@@ -221,6 +146,6 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
 
     @Override
     public ArpDialect getDialect() {
-        return ARP_DIALECT;
+        return AbstractArpConf.loadArpFile(ARP_FILENAME, QuestdbDialect::new);
     }
 }

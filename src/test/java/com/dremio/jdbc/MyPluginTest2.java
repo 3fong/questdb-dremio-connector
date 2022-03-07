@@ -14,7 +14,6 @@ import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 public class MyPluginTest2 extends BaseTestQuery2 {
-    private QuestDBConf questDBConf;
 
     @Before
     public void setUp(){
@@ -25,10 +24,11 @@ public class MyPluginTest2 extends BaseTestQuery2 {
 
     @Before
     public  void initSource(){
-        getSabotContext().getOptionManager().setOption(OptionValue.createLong(OptionValue.OptionType.SYSTEM, ExecConstants.ELASTIC_ACTION_RETRIES, 3));
+        getSabotContext().getOptionManager().setOption(OptionValue.createLong(
+                OptionValue.OptionType.SYSTEM, ExecConstants.ELASTIC_ACTION_RETRIES, 3));
         SourceConfig sc = new SourceConfig();
-        sc.setName("qdb");
-        questDBConf = new QuestDBConf();
+        sc.setName("questdb");
+        QuestDBConf questDBConf = new QuestDBConf();
         questDBConf.host="127.0.0.1";
         questDBConf.port=8812;
         questDBConf.user ="admin";
@@ -41,7 +41,7 @@ public class MyPluginTest2 extends BaseTestQuery2 {
 
     @Test
     public  void test() throws Exception {
-        String query  = "select id,name from qdb.demoapp";
+        String query  = "select id,name from questdb.demoapp limit 1";
         TestResult testResult=  testBuilder()
                 .sqlQuery(query)
                 .unOrdered()

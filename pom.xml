@@ -23,14 +23,8 @@
        <dependency>
            <groupId>org.postgresql</groupId>
            <artifactId>postgresql</artifactId>
-           <version>42.3.3</version>
-       </dependency>
-       <dependency>
-           <groupId>com.dremio.sabot</groupId>
-           <artifactId>dremio-sabot-kernel</artifactId>
-           <classifier>tests</classifier>
-           <scope>test</scope>
-           <version>${version.dremio}</version>
+           <version>42.2.24</version>
+<!--           <version>42.3.3</version>-->
        </dependency>
 
        <dependency>
@@ -41,6 +35,13 @@
        </dependency>
 
         <!-- test -->
+       <dependency>
+           <groupId>com.dremio.sabot</groupId>
+           <artifactId>dremio-sabot-kernel</artifactId>
+           <classifier>tests</classifier>
+           <scope>test</scope>
+           <version>${version.dremio}</version>
+       </dependency>
        <dependency>
            <groupId>com.dremio</groupId>
            <artifactId>dremio-common</artifactId>
@@ -86,10 +87,6 @@
         </plugins>
     </build>
     <repositories>
-        <repository>
-            <id>tencent-public</id>
-            <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
-        </repository>
         <repository>
             <id>dremio-public</id>
             <url>https://maven.dremio.com/public/</url>

@@ -10,7 +10,7 @@ public class PostgreQuestDb {
         properties.setProperty("password", "quest");
         properties.setProperty("sslmode", "disable");
 
-        final Connection connection = DriverManager.getConnection("jdbc:postgresql://localhost:8812/", properties);
+        final Connection connection = DriverManager.getConnection("jdbc:postgresql://127.0.0.1:8812/", properties);
         Statement statement = connection.createStatement();
         boolean execute = statement.execute("demoapp limit 1");
         ResultSet resultSet = statement.getResultSet();
