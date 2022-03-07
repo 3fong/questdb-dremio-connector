@@ -38,9 +38,12 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
 
         @Override
         protected JdbcFetcherProto.CanonicalizeTablePathResponse getDatasetHandleViaGetTables(JdbcFetcherProto.CanonicalizeTablePathRequest request, Connection connection) throws SQLException {
+            logger.info("query request:{}", request);
             com.dremio.exec.store.jdbc.JdbcFetcherProto.CanonicalizeTablePathResponse.Builder responseBuilder = JdbcFetcherProto.CanonicalizeTablePathResponse.newBuilder();
             responseBuilder.setTable(request.getTable());
-            return responseBuilder.build();
+            JdbcFetcherProto.CanonicalizeTablePathResponse response = responseBuilder.build();
+            logger.info("query response:{}", response);
+            return response;
         }
 
     }
@@ -91,7 +94,7 @@ public class QuestDBConf extends AbstractArpConf<QuestDBConf> {
     @Tag(5)
     @DisplayMetadata(label = "port")
     @NotMetadataImpacting
-    public int port = 5432;
+    public int port = 8812;
 
     @Tag(6)
     @DisplayMetadata(label = "Record fetch size")

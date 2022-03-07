@@ -1,5 +1,5 @@
 {
-  "sourceType": "CRATEDB",
+  "sourceType": "QUESTDB",
   "metadataRefresh": {
     "datasetDiscovery": true
   },
